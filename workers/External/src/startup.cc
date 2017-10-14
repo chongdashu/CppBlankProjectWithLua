@@ -1,15 +1,20 @@
 #include <improbable/worker.h>
 #include <improbable/standard_library.h>
 #include <iostream>
+#include <chrono>
 
 // Use this to make a worker::ComponentRegistry. This worker doesn't use any components yet
 // For example use worker::Components<improbable::Position, improbable::Metadata> to track these common components
 using EmptyRegistry = worker::Components<>;
 
+using namespace std::chrono_literals;
+
 // Constants and parameters
 const int ErrorExitStatus = 1;
 const std::string kLoggerName = "startup.cc";
 const std::uint32_t kGetOpListTimeoutInMilliseconds = 100;
+
+const std::uint32_t kUpdatesPerSecond = 1;
 
 // Connection helpers
 worker::Connection ConnectWithLocator(const std::string hostname, 
@@ -49,7 +54,13 @@ worker::Connection ConnectWithReceptionist(const std::string hostname,
 
 // Entry point
 int main(int argc, char** argv) {
-    auto print_usage = [&]() {
+    
+	auto wait_for_keypress = [&]() {
+		std::cout << "Press return to exit...";
+		std::cin.get();
+	};
+
+	auto print_usage = [&]() {
         std::cout << "Usage: External receptionist <hostname> <port> <worker_id>" << std::endl;
         std::cout << "       External locator <hostname> <project_name> <deployment_id> <login_token>";
         std::cout << std::endl;
@@ -67,6 +78,7 @@ int main(int argc, char** argv) {
 
     if (argc < 2) {
         print_usage();
+		wait_for_keypress();
         return ErrorExitStatus;
     }
 
@@ -113,7 +125,28 @@ int main(int argc, char** argv) {
         std::cout << "Connection: " << op.Message << std::endl;
     });
 
+	using clock = std::chrono::high_resolution_clock;
+	std::chrono::nanoseconds accumulator(0ns);
+	auto time_start = clock::now();
+
+	std::chrono::nanoseconds timestep(std::chrono::milliseconds(1000 / kUpdatesPerSecond));
+
     while (is_connected) {
+		auto delta_time = clock::now() - time_start;
+		time_start = clock::now();
+		accumulator += std::chrono::duration_cast<std::chrono::nanoseconds>(delta_time);
+
+		// update game logic as lag permits
+		while (accumulator >= timestep) {
+			accumulator -= timestep;
+
+			std::cout << "Tick()" << std::endl; // update at a fixed rate each time
+		}
+
+		// calculate how close or far we are from the next timestep
+		auto alpha = (float) accumulator.count() / timestep.count();
+		// interpolate by alpha
+
         dispatcher.Process(connection.GetOpList(kGetOpListTimeoutInMilliseconds));
     }
 
