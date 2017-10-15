@@ -14,7 +14,7 @@ const int ErrorExitStatus = 1;
 const std::string kLoggerName = "startup.cc";
 const std::uint32_t kGetOpListTimeoutInMilliseconds = 100;
 
-const std::uint32_t kUpdatesPerSecond = 1;
+const std::uint32_t kUpdatesPerSecond = 10;
 
 // Connection helpers
 worker::Connection ConnectWithLocator(const std::string hostname, 
@@ -52,8 +52,14 @@ worker::Connection ConnectWithReceptionist(const std::string hostname,
     return future.Get();
 }
 
+void Tick(double deltaTime /* in seconds*/) 
+{
+	std::cout << "Tick(), deltaTime=" << deltaTime << std::endl;
+}
+
 // Entry point
-int main(int argc, char** argv) {
+int main(int argc, char** argv) 
+{
     
 	auto wait_for_keypress = [&]() {
 		std::cout << "Press return to exit...";
@@ -132,15 +138,16 @@ int main(int argc, char** argv) {
 	std::chrono::nanoseconds timestep(std::chrono::milliseconds(1000 / kUpdatesPerSecond));
 
     while (is_connected) {
-		auto delta_time = clock::now() - time_start;
+		auto duration_delta = clock::now() - time_start;
 		time_start = clock::now();
-		accumulator += std::chrono::duration_cast<std::chrono::nanoseconds>(delta_time);
+
+		auto time_delta = std::chrono::duration_cast<std::chrono::nanoseconds>(duration_delta);
+		accumulator += time_delta;
 
 		// update game logic as lag permits
 		while (accumulator >= timestep) {
 			accumulator -= timestep;
-
-			std::cout << "Tick()" << std::endl; // update at a fixed rate each time
+			Tick(std::chrono::duration<double>(timestep).count());
 		}
 
 		// calculate how close or far we are from the next timestep
@@ -149,6 +156,9 @@ int main(int argc, char** argv) {
 
         dispatcher.Process(connection.GetOpList(kGetOpListTimeoutInMilliseconds));
     }
+
+	std::cout << "App has finished execution... press enter to exit" << std::endl;
+	wait_for_keypress();
 
     return ErrorExitStatus;
 }
